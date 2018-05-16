@@ -46,178 +46,213 @@
 
 #include <zip.h>
 
+#include <locale>
+#include <codecvt>
+#include <string>
+
 namespace Ctr
 {
 
-AssetManager::AssetManager()
-{
-}
+	AssetManager::AssetManager()
+	{
+	}
 
-AssetManager::~AssetManager()
-{
-}
+	AssetManager::~AssetManager()
+	{
+	}
 
-bool
-AssetManager::fileExists(const std::string& pathName)
-{
-    struct stat finfo;
-    int statResult = stat(pathName.c_str(), &finfo);
-    if (statResult == 0)
-        return true;
-    else 
-        return false;
-}
+	std::wstring AssetManager::getResourceKeyName(std::string filePath)
+	{
+		std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+		std::wstring resourceName = converter.from_bytes(filePath);
+		std::replace(resourceName.begin(), resourceName.end(), '/', '_');
+		std::replace(resourceName.begin(), resourceName.end(), '\\', '_');
+		std::transform(resourceName.begin(), resourceName.begin(), resourceName.end(), ::toupper);
+		return resourceName;
+	}
 
-pugi::xml_document*
-AssetManager::openXmlDocument(const std::string& resourcePathName)
-{
-    pugi::xml_document * xmlDocument = nullptr;
+	bool AssetManager::fileExists(const std::string& pathName)
+	{
+		// Check file-system
+		struct stat finfo;
+		const int statResult = stat(pathName.c_str(), &finfo);
+		return statResult == 0;
+	}
 
-    std::unique_ptr<typename DataStream> stream = 
-        std::unique_ptr<typename DataStream>(openStream(resourcePathName));
-    if (stream)
-    {
-        xmlDocument = new pugi::xml_document();
-        // Create intermediate buffer;
-        char * buffer = (char*)malloc(sizeof(char) * stream->size()+1);
-        memset(buffer, 0, stream->size()+1);
-        if (buffer)
-        {
-            stream->readBytes(buffer, stream->size());
-            if (xmlDocument->load(buffer) == false)
-            {
-                LOG ("Failed to load xml document from stream: " << resourcePathName)
-                delete xmlDocument;
-                xmlDocument = nullptr;
-            }
-            free(buffer);
-        }
-    }
+	//AssetStorageKind AssetManager::fileExists(const std::string& pathName)
+	//{
+	//	// Check resources 
+	//	HRSRC resource = ::FindResource(nullptr, getResourceKeyName(pathName).c_str(), RT_RCDATA);
+	//	if (resource)
+	//		return AssetStorageKind::Resource;
 
-    return xmlDocument;
-}
+	//	// Check file-system
+	//	struct stat finfo;
+	//	int statResult = stat(pathName.c_str(), &finfo);
+	//	if (statResult == 0)
+	//		return AssetStorageKind::File;
 
-AssetManager*
-AssetManager::assetManager()
-{
-    static std::unique_ptr<AssetManager> _assetManager;
-    if (!_assetManager)
-    {
-        _assetManager.reset(new AssetManager());
-    }
+	//	return AssetStorageKind::Missing;
+	//}
 
-    return _assetManager.get();
-}
+	pugi::xml_document*
+		AssetManager::openXmlDocument(const std::string& resourcePathName)
+	{
+		pugi::xml_document * xmlDocument = nullptr;
 
-bool
-AssetManager::openArchive(const std::string& archivePathName,
-                          ArchiveHandle& resultHandle)
-{
-    bool result = false;
-    int error = 0;
-    zip *z = zip_open(archivePathName.c_str(), 0, &error);
-    if (z == nullptr)
-    {
-        LOG("Failed to open archive " << archivePathName);
-        result = false;
-    }
-    else
-    {
-        resultHandle = ArchiveHandle();
-        resultHandle.build(archivePathName);
-        _archives.insert(std::make_pair(resultHandle, z));
-        result = true;
-    }
-    return result;
-}
+		std::unique_ptr<typename DataStream> stream =
+			std::unique_ptr<typename DataStream>(openStream(resourcePathName));
+		if (stream)
+		{
+			xmlDocument = new pugi::xml_document();
+			// Create intermediate buffer;
+			char * buffer = (char*)malloc(sizeof(char) * stream->size() + 1);
+			memset(buffer, 0, stream->size() + 1);
+			if (buffer)
+			{
+				stream->readBytes(buffer, stream->size());
+				if (xmlDocument->load(buffer) == false)
+				{
+					LOG("Failed to load xml document from stream: " << resourcePathName)
+						delete xmlDocument;
+					xmlDocument = nullptr;
+				}
+				free(buffer);
+			}
+		}
 
-void
-AssetManager::closeArchive(const ArchiveHandle& archiveHandle)
-{
-    
-}
+		return xmlDocument;
+	}
 
-DataStream* 
-AssetManager::openCompressedStream(const ArchiveHandle& handle,
-                                   const std::string& streamPathName)
-{
-    DataStream* dataStream = nullptr;
-    int idx = -1;
-    auto it = _archives.find(handle);
-    zip* archive = nullptr;
+	AssetManager*
+		AssetManager::assetManager()
+	{
+		static std::unique_ptr<AssetManager> _assetManager;
+		if (!_assetManager)
+		{
+			_assetManager.reset(new AssetManager());
+		}
 
-    if (it != _archives.end())
-    {
-        zip* archive = it->second;
-        zip_int64_t index = zip_name_locate(archive, streamPathName.c_str(), ZIP_FL_NOCASE);
-        if (index >= 0)
-        {
-            zip_file* file = zip_fopen_index(archive, index, 0);
-            if (file)
-            {
-                struct zip_stat st;
-                zip_stat_init(&st);
-                zip_stat_index(archive, index, 0, &st);
+		return _assetManager.get();
+	}
 
+	bool
+		AssetManager::openArchive(const std::string& archivePathName,
+			ArchiveHandle& resultHandle)
+	{
+		bool result = false;
+		int error = 0;
+		zip *z = zip_open(archivePathName.c_str(), 0, &error);
+		if (z == nullptr)
+		{
+			LOG("Failed to open archive " << archivePathName);
+			result = false;
+		}
+		else
+		{
+			resultHandle = ArchiveHandle();
+			resultHandle.build(archivePathName);
+			_archives.insert(std::make_pair(resultHandle, z));
+			result = true;
+		}
+		return result;
+	}
 
-                // Now we unzip it to a membuffer.
-                uint8_t * buffer = (uint8_t *)malloc(st.size);
-                if (st.size > 0)
-                {
-                    if (zip_fread(file, buffer, st.size))
-                    {
-                        dataStream = new Ctr::MemoryDataStream(streamPathName, buffer, st.size, true);
-                        return dataStream;
-                    }
-                    else
-                    {
-                        free(buffer);
-                    }
-                }
-            }
-        }
-    }
+	void
+		AssetManager::closeArchive(const ArchiveHandle& archiveHandle)
+	{
 
-    return dataStream;
-}
+	}
 
-DataStream *
-AssetManager::openStream (const std::string& streamPathName)
-{
-    DataStream* stream = nullptr;
-    if (AssetManager::fileExists(streamPathName))
-    {
-        std::ios::openmode mode = std::ios::in | std::ios::binary;
-        std::fstream* rwStream = new std::fstream();
-        rwStream->open(streamPathName.c_str(), mode);
-        // Should check ensure open succeeded, in case fail for some reason.
-        if (rwStream->fail())
-        {
-            LOG ("Cannot open file: " << streamPathName);
-        }
-        else
-        {
-            rwStream->seekg (0, std::ios::end);
-            size_t length = (size_t)(rwStream->tellg());
-            rwStream->seekg (0, std::ios::beg);
+	DataStream*
+		AssetManager::openCompressedStream(const ArchiveHandle& handle,
+			const std::string& streamPathName)
+	{
+		DataStream* dataStream = nullptr;
+		int idx = -1;
+		auto it = _archives.find(handle);
+		zip* archive = nullptr;
 
-            uint8_t* buffer = (uint8_t*)malloc (sizeof(uint8_t)*length);
-            rwStream->read((char*)buffer, length);
-
-            stream = new MemoryDataStream(streamPathName, buffer, length, true);
-            rwStream->close();
-        }
-        delete rwStream;
-        rwStream = nullptr;
-    }
-
-    if (!stream)
-    {
-        LOG ("ERROR could not open stream " << streamPathName);
-    }
-
-    return stream;
-}
+		if (it != _archives.end())
+		{
+			zip* archive = it->second;
+			zip_int64_t index = zip_name_locate(archive, streamPathName.c_str(), ZIP_FL_NOCASE);
+			if (index >= 0)
+			{
+				zip_file* file = zip_fopen_index(archive, index, 0);
+				if (file)
+				{
+					struct zip_stat st;
+					zip_stat_init(&st);
+					zip_stat_index(archive, index, 0, &st);
 
 
+					// Now we unzip it to a membuffer.
+					uint8_t * buffer = (uint8_t *)malloc(st.size);
+					if (st.size > 0)
+					{
+						if (zip_fread(file, buffer, st.size))
+						{
+							dataStream = new Ctr::MemoryDataStream(streamPathName, buffer, st.size, true);
+							return dataStream;
+						}
+						else
+						{
+							free(buffer);
+						}
+					}
+				}
+			}
+		}
+
+		return dataStream;
+	}
+
+	DataStream *
+		AssetManager::openStream(const std::string& streamPathName)
+	{
+		DataStream* stream = nullptr;
+
+		std::wstring resourceName = getResourceKeyName(streamPathName);
+		HRSRC const resource = ::FindResource(nullptr, resourceName.c_str(), RT_RCDATA);
+		if (resource)
+		{
+			const unsigned int resourceSize = ::SizeofResource(nullptr, resource);
+			const HGLOBAL resourceData = ::LoadResource(nullptr, resource);
+			void* resourcePtr = ::LockResource(resourceData);
+			stream = new MemoryDataStream(streamPathName, resourcePtr, resourceSize, false, true);
+		}
+		else if (fileExists(streamPathName))
+		{
+			std::ios::openmode mode = std::ios::in | std::ios::binary;
+			std::fstream* rwStream = new std::fstream();
+			rwStream->open(streamPathName.c_str(), mode);
+			// Should check ensure open succeeded, in case fail for some reason.
+			if (rwStream->fail())
+			{
+				LOG("Cannot open file: " << streamPathName);
+			}
+			else
+			{
+				rwStream->seekg(0, std::ios::end);
+				size_t length = (size_t)(rwStream->tellg());
+				rwStream->seekg(0, std::ios::beg);
+
+				uint8_t* buffer = (uint8_t*)malloc(sizeof(uint8_t)*length);
+				rwStream->read((char*)buffer, length);
+
+				stream = new MemoryDataStream(streamPathName, buffer, length, true);
+				rwStream->close();
+			}
+			delete rwStream;
+			rwStream = nullptr;
+		}
+
+		if (!stream)
+		{
+			LOG("ERROR could not open stream " << streamPathName);
+		}
+
+		return stream;
+	}
 }

@@ -46,39 +46,31 @@
 namespace Ctr
 {
 
-//-----------------------------------------------------------
-// class Log
-// Very, very simple and dumb logging to file wrapper.
-// Not threadsafe. Prints to std out along with file io.
-//-----------------------------------------------------------
-enum LogEntryLevel
-{
-    InfoEntry = 0,
-    WarningEntry = 1,
-    CriticalEntry = 2
-};
+	//-----------------------------------------------------------
+	// class Log
+	// Very, very simple and dumb logging to file wrapper.
+	// Not threadsafe. Prints to std out along with file io.
+	//-----------------------------------------------------------
+	enum LogLevel
+	{
+		InfoEntry = 0,
+		WarningEntry = 1,
+		CriticalEntry = 2
+	};
 
-enum LoggingLevel
-{
-    LogSpamtastic = 0,
-    LogWarningsAndCritical = 1,
-    LogCritical = 2
-};
+	class Log
+	{
+	public:
+		/** Pass an empty filename to disable logging*/
+		static void                initialize(const std::string& logFilePathName, const LogLevel loggingLevel);
 
-class Log
-{
-  public:
-    static void                write(const std::string& s, Ctr::LogEntryLevel level = Ctr::InfoEntry);
-    static void                setLogLevel();
+		static void                write(const std::string& s, Ctr::LogLevel level = Ctr::InfoEntry);
 
-  protected:
-    static void                initialize(const std::string& logFilePathName);
-
-  private:
-    static bool                _initialized;
-    static std::string         _filePathName;
-    static LoggingLevel        _logLevel;
-};
+	private:
+		static bool                _initialized;
+		static std::string         _filePathName;
+		static LogLevel        _logLevel;
+	};
 
 #define LOG(text)                                     \
 {                                                     \

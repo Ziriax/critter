@@ -43,47 +43,52 @@
 
 namespace Ctr
 {
-std::string    Log::_filePathName = std::string("IblLog.log");
-bool           Log::_initialized = false;
-LoggingLevel   Log::_logLevel = LogCritical;
+	std::string    Log::_filePathName;
+	bool           Log::_initialized = false;
+	LogLevel       Log::_logLevel = WarningEntry;
 
-namespace
-{
-Log applicationLog;
-}
+	namespace
+	{
+		Log applicationLog;
+	}
 
-void Log::initialize(const std::string& filePathName)
-{
-    {
-        std::cout.precision (4);
-        _filePathName = filePathName;
-        DeleteFileA(_filePathName.c_str());
-        _initialized = true;
-    }
-}
+	void Log::initialize(const std::string& logFilePathName, const LogLevel loggingLevel)
+	{
+		std::cout.precision(4);
 
-void 
-Log::write (const std::string& buffer, LogEntryLevel level)
-{
-    if (level < _logLevel)
-        return;
+		if (!_filePathName.empty())
+		{
+			DeleteFileA(_filePathName.c_str());
+		}
 
-    if (!_initialized)
-    {
-        Log::initialize(Log::_filePathName);
-    }
+		_filePathName = logFilePathName;
 
-    FILE* file = 0;
-    int result;
-    if((result = fopen_s(&file, Log::_filePathName.c_str(), "a+"))!=0)
-        return;
+		_logLevel = loggingLevel;
 
-    std::ostringstream _file;
-    _file.precision (4);
-    _file << buffer << std::endl;
-    std::cout << buffer << "\n";
-    fwrite (_file.str().c_str(), sizeof (char), strlen (_file.str().c_str()), file);
-    fclose (file);
-}
+		_initialized = true;
+	}
+
+	void Log::write(const std::string& buffer, LogLevel level)
+	{
+		if (level < _logLevel)
+			return;
+
+		auto& out = level == InfoEntry ? std::cout : std::cerr;
+		out << buffer << "\n";
+
+		if (_initialized)
+		{
+			FILE* file = 0;
+			int result;
+			if ((result = fopen_s(&file, Log::_filePathName.c_str(), "a+")) != 0)
+				return;
+
+			std::ostringstream _file;
+			_file.precision(4);
+			_file << buffer << std::endl;
+			fwrite(_file.str().c_str(), sizeof(char), strlen(_file.str().c_str()), file);
+			fclose(file);
+		}
+	}
 
 }
