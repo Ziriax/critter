@@ -119,7 +119,7 @@ IBLProbe::IBLProbe(Ctr::IDevice * device) :
     _maxPixelBProperty->set(0);
     
     _hdrPixelFormatProperty->set(Ctr::PF_FLOAT32_RGBA);
-    _mdrPixelFormatProperty->set(Ctr::PF_A8R8G8B8);
+    _mdrPixelFormatProperty->set(Ctr::PF_FLOAT32_RGBA);
 
     _deviceProperty->set(_device);
     _dimensionProperty->set(Ctr::CubeMap);
@@ -143,7 +143,7 @@ IBLProbe::IBLProbe(Ctr::IDevice * device) :
     _environmentCubeMapMDR = new RenderTextureProperty(this, "SourceMDR", true /* use mips */, true /* gen mips*/);
     setupCubeMap(_environmentCubeMapMDR, _sourceResolutionProperty, _mdrPixelFormatProperty);
 
-    _diffuseCubeMapMDR = new RenderTextureProperty(this, "DiffuseMDR", false /* use mips */, false /* gen mips*/);
+    _diffuseCubeMapMDR = new RenderTextureProperty(this, "DiffuseMDR", true /* use mips */, false /* gen mips*/);
     setupCubeMap(_diffuseCubeMapMDR, _diffuseResolutionProperty, _mdrPixelFormatProperty);
 
     _specularCubeMapMDR = new RenderTextureProperty(this, "SpecularMDR", true /* use mips */, false /* gen mips*/);

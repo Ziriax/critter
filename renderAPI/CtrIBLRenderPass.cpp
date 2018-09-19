@@ -160,13 +160,13 @@ IBLRenderPass::refineDiffuse(Ctr::Scene* scene,
 	const size_t mipLevels = probe->diffuseCubeMap()->resource()->mipLevels();
 	const uint32_t maxMipSize = probe->diffuseCubeMap()->resource()->width();
 
+	// Render just one level, create mip-maps for the others
+	// [PV] For some reason, generateMipMaps doesn't work on the diffuse map?
 	for (uint32_t mipId = 0; mipId < mipLevels; mipId++)
 	{
 		const int mipSize = maxMipSize >> mipId;
 
-		// Fix edges seams for older hardware
-		// https://www.gamedev.net/blogs/entry/2005516-seamless-filtering-across-faces-of-dynamic-cube-map/
-		const float fov = Ctr::BB_PI * 0.5f; //  2.0 * atan(mipSize / (mipSize - 0.5));
+		const float fov = BB_PI * 0.5;
 
 		const float currentMip = static_cast<float>(mipId);
 
@@ -236,6 +236,8 @@ IBLRenderPass::refineDiffuse(Ctr::Scene* scene,
 
         importanceSamplingShaderDiffuse->renderMesh (Ctr::RenderRequest(importanceSamplingDiffuseTechnique, scene, camera, _sphereMesh));
     }
+
+	//probe->diffuseCubeMap()->generateMipMaps();
 }
 
 void
@@ -262,11 +264,13 @@ IBLRenderPass::refineSpecular(Ctr::Scene* scene,
     {
     	const float currentMip = static_cast<float>(mipId);
 		const float roughness = currentMip / (mipLevels - 1);
-		const int mipSize = maxMipSize >> mipId;
+		const float mipSize = maxMipSize >> mipId;
 
 		// Fix edges seams for older hardware
 		// https://www.gamedev.net/blogs/entry/2005516-seamless-filtering-across-faces-of-dynamic-cube-map/
-		const float fov = Ctr::BB_PI * 0.5f; // 2.0 * atan(mipSize / (mipSize - 0.5)); 
+		const float edgeFixup = 1;
+
+		const float fov = BB_PI * 0.5f; //  mipSize == 1 ? : 2.0 * atan(mipSize / (mipSize - 1.0f));
 
 		float projNear = camera->zNear();
 		float projFar = camera->zFar();
@@ -286,7 +290,7 @@ IBLRenderPass::refineSpecular(Ctr::Scene* scene,
     	const Ctr::ISurface* targetSurface = probe->specularCubeMap()->surface(-1, mipId);
         Ctr::FrameBuffer framebuffer(targetSurface, nullptr);
 
-        Ctr::Viewport mipViewport (0.0f,0.0f, (float)(mipSize), (float)(mipSize), 0.0f, 1.0f);
+        Ctr::Viewport mipViewport (0.0f,0.0f, mipSize, mipSize, 0.0f, 1.0f);
         _deviceInterface->bindFrameBuffer(framebuffer);
         _deviceInterface->setViewport(&mipViewport);
 
@@ -294,6 +298,7 @@ IBLRenderPass::refineSpecular(Ctr::Scene* scene,
         const Ctr::GpuTechnique*     importanceSamplingSpecularTechnique = nullptr;
         const Ctr::GpuVariable*      convolutionSrcSpecularVariable = nullptr;
         const Ctr::GpuVariable*      convolutionMipSpecularVariable = nullptr;
+		const Ctr::GpuVariable*      convolutionEdgeFixupSpecularVariable = nullptr;
 		const Ctr::GpuVariable*      convolutionRoughnessSpecularVariable = nullptr;
         const Ctr::GpuVariable*      convolutionSamplesOffsetSpecularVariable = nullptr;
         const Ctr::GpuVariable*      convolutionSampleCountSpecularVariable = nullptr;
@@ -304,6 +309,7 @@ IBLRenderPass::refineSpecular(Ctr::Scene* scene,
         importanceSamplingShaderSpecular->getParameterByName("ConvolutionSrc",     convolutionSrcSpecularVariable);
         importanceSamplingShaderSpecular->getParameterByName("LastResult",         convolutionSrcLastResultSpecularVariable);
         importanceSamplingShaderSpecular->getParameterByName("ConvolutionMip",     convolutionMipSpecularVariable);
+		importanceSamplingShaderSpecular->getParameterByName("ConvolutionEdgeFixup", convolutionEdgeFixupSpecularVariable);
 		importanceSamplingShaderSpecular->getParameterByName("ConvolutionRoughness", convolutionRoughnessSpecularVariable);
         importanceSamplingShaderSpecular->getParameterByName("ConvolutionSamplesOffset", convolutionSamplesOffsetSpecularVariable);
         importanceSamplingShaderSpecular->getParameterByName("ConvolutionSampleCount", convolutionSampleCountSpecularVariable);
@@ -313,7 +319,8 @@ IBLRenderPass::refineSpecular(Ctr::Scene* scene,
         convolutionSrcSpecularVariable->setTexture(sourceTexture);
         convolutionSrcLastResultSpecularVariable->setTexture(probe->lastSpecularCubeMap());
         convolutionMipSpecularVariable->set ((const float*)&currentMip, sizeof (float));
-        convolutionRoughnessSpecularVariable->set((const float*)&roughness, sizeof (float));
+		convolutionEdgeFixupSpecularVariable->set((const float*)&edgeFixup, sizeof(float));
+		convolutionRoughnessSpecularVariable->set((const float*)&roughness, sizeof (float));
         convolutionSamplesOffsetSpecularVariable->set((const float*)&samplesOffset, sizeof (float));
         convolutionSampleCountSpecularVariable->set(&samplesPerFrame , sizeof(float));
         convolutionMaxSamplesSpecularVariable->set(&sampleCount, sizeof(float));
