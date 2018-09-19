@@ -49,31 +49,40 @@ struct zip;
 
 namespace Ctr
 {
-class DataStream;
+	class DataStream;
 
-typedef Hash ArchiveHandle;
+	//enum class AssetStorageKind
+	//{
+	//	Missing,
+	//	File,
+	//	Resource
+	//};
 
-class
-AssetManager
-{
-  public:
-    AssetManager();
-    virtual ~AssetManager();
+	typedef Hash ArchiveHandle;
 
-    static AssetManager*                 assetManager();
-    static bool                          fileExists(const std::string& filename);
-    DataStream*                          openStream (const std::string& streamPathName);
+	class
+		AssetManager
+	{
+	public:
+		AssetManager();
+		virtual ~AssetManager();
 
-    bool                                 openArchive(const std::string& archivePathName,
-                                                     ArchiveHandle& result);
-    void                                 closeArchive(const ArchiveHandle& handle);
-    DataStream*                          openCompressedStream(const ArchiveHandle& handle,
-                                                              const std::string& streamPathName);
-    pugi::xml_document*                  openXmlDocument(const std::string& resourcePathName);
+		static AssetManager*                 assetManager();
+		//static AssetStorageKind              fileExists(const std::string& filename);
+		static bool                          fileExists(const std::string& filename);
+		DataStream*                          openStream(const std::string& streamPathName);
 
-  protected:
-    std::map<ArchiveHandle, zip*>        _archives;
-};
+		bool                                 openArchive(const std::string& archivePathName,
+			ArchiveHandle& result);
+		void                                 closeArchive(const ArchiveHandle& handle);
+		DataStream*                          openCompressedStream(const ArchiveHandle& handle,
+			const std::string& streamPathName);
+		pugi::xml_document*                  openXmlDocument(const std::string& resourcePathName);
+
+	protected:
+		static std::wstring getResourceKeyName(std::string filePath);
+		std::map<ArchiveHandle, zip*>        _archives;
+	};
 }
 
 #endif
