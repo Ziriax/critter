@@ -108,7 +108,7 @@ IBLProbe::IBLProbe(Ctr::IDevice * device) :
     _markedComputedProperty->set(false);
     _diffuseResolutionProperty->set(128);
     _specularResolutionProperty->set(512);
-    _environmentScaleProperty->set(2.0);
+    _environmentScaleProperty->set(1.0);
     _mipDropProperty->set(0);
     _iblHueProperty->set(0.0f);
     _iblContrastProperty->set(0.0f);
@@ -133,7 +133,7 @@ IBLProbe::IBLProbe(Ctr::IDevice * device) :
 
     for (uint32_t map = 0; map < 2; map++)
     {
-        _diffuseCubeMap[map] = new RenderTextureProperty(this, "DiffuseHDR", false /* use mips */, false /* gen mips*/);
+        _diffuseCubeMap[map] = new RenderTextureProperty(this, "DiffuseHDR", true /* use mips */, false /* gen mips*/);
         setupCubeMap(_diffuseCubeMap[map], _diffuseResolutionProperty, _hdrPixelFormatProperty);
     }
 

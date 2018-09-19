@@ -155,46 +155,53 @@ void
 IBLRenderPass::refineDiffuse(Ctr::Scene* scene,
                              const Ctr::IBLProbe* probe)
 {
-    // TODO: Optimize.
 	Ctr::Camera* camera = scene->camera();
 
-	float projNear = camera->zNear();
-	float projFar = camera->zFar();
-    Ctr::Matrix44f proj;
-    Ctr::projectionPerspectiveMatrixLH (Ctr::BB_PI * 0.5f,
-                                       1.0, 
-                                       projNear, 
-                                       projFar,
-                                       &proj);
+	const size_t mipLevels = probe->diffuseCubeMap()->resource()->mipLevels();
+	const uint32_t maxMipSize = probe->diffuseCubeMap()->resource()->width();
 
-	Ctr::Vector3f origin(0, 0, 0);
-	// Setup view matrix
-	_environmentTransformCache->set(probe->basis(), proj, probe->basis(), origin, projNear, projFar, -1);
-	camera->setCameraTransformCache(_environmentTransformCache);
+	for (uint32_t mipId = 0; mipId < mipLevels; mipId++)
+	{
+		const int mipSize = maxMipSize >> mipId;
 
-    // Setup our source.
-    size_t mipLevels = probe->diffuseCubeMap()->resource()->mipLevels();
-    const Ctr::ITexture* sourceTexture = probe->environmentCubeMap();
+		// Fix edges seams for older hardware
+		// https://www.gamedev.net/blogs/entry/2005516-seamless-filtering-across-faces-of-dynamic-cube-map/
+		const float fov = Ctr::BB_PI * 0.5f; //  2.0 * atan(mipSize / (mipSize - 0.5));
 
-    float roughness = 0;
-    float roughnessDelta = 1.0f / (float)(mipLevels);
-    float samplesOffset = (float)(probe->sampleOffset());
-    float samplesPerFrame = (float)(probe->samplesPerFrame());
-    float sampleCount = (float)(probe->sampleCount());
+		const float currentMip = static_cast<float>(mipId);
 
-    roughness = 1.0;
+		float projNear = camera->zNear();
+		float projFar = camera->zFar();
+	    Ctr::Matrix44f proj;
+	    Ctr::projectionPerspectiveMatrixLH (fov,
+	                                       1.0, 
+	                                       projNear, 
+	                                       projFar,
+	                                       &proj);
 
-    const Ctr::Brdf* brdf = scene->activeBrdf();
-    const Ctr::IShader* importanceSamplingShaderDiffuse = brdf->diffuseImportanceSamplingShader();
-    // Convolve for diffuse.
-    {
-        float currentMip = 0;
+		Ctr::Vector3f origin(0, 0, 0);
+		// Setup view matrix
+		_environmentTransformCache->set(probe->basis(), proj, probe->basis(), origin, projNear, projFar, -1);
+		camera->setCameraTransformCache(_environmentTransformCache);
 
-        const Ctr::ISurface* targetSurface = probe->diffuseCubeMap()->surface();
-        Ctr::FrameBuffer framebuffer(targetSurface, nullptr);
+	    // Setup our source.
+	    const Ctr::ITexture* sourceTexture = probe->environmentCubeMap();
 
-        Ctr::Viewport mipViewport (0,0, probe->diffuseResolution(), probe->diffuseResolution(), 0, 1);
-        _deviceInterface->bindFrameBuffer(framebuffer);
+	    const float samplesOffset = static_cast<float>(probe->sampleOffset());
+		const float samplesPerFrame = static_cast<float>(probe->samplesPerFrame());
+		const float sampleCount = static_cast<float>(probe->sampleCount());
+
+	    const float roughness = 1.0;
+
+	    const Ctr::Brdf* brdf = scene->activeBrdf();
+	    const Ctr::IShader* importanceSamplingShaderDiffuse = brdf->diffuseImportanceSamplingShader();
+
+		// Convolve for diffuse.
+        const Ctr::ISurface* targetSurface = probe->diffuseCubeMap()->surface(-1, mipId);
+        const Ctr::FrameBuffer framebuffer(targetSurface, nullptr);
+
+		Ctr::Viewport mipViewport(0.0f, 0.0f, static_cast<float>(mipSize), static_cast<float>(mipSize), 0.0f, 1.0f);
+		_deviceInterface->bindFrameBuffer(framebuffer);
         _deviceInterface->setViewport(&mipViewport);
         _deviceInterface->clearSurfaces (0, Ctr::CLEAR_TARGET, 0, 0, 0, 1);
 
@@ -212,7 +219,7 @@ IBLRenderPass::refineDiffuse(Ctr::Scene* scene,
         importanceSamplingShaderDiffuse->getParameterByName("ConvolutionSrc", convolutionSrcDiffuseVariable);
         importanceSamplingShaderDiffuse->getParameterByName("LastResult", convolutionSrcLastResultDiffuseVariable);
         importanceSamplingShaderDiffuse->getParameterByName("ConvolutionMip", convolutionMipDiffuseVariable);
-        importanceSamplingShaderDiffuse->getParameterByName("ConvolutionRoughness", convolutionRoughnessDiffuseVariable);
+		importanceSamplingShaderDiffuse->getParameterByName("ConvolutionRoughness", convolutionRoughnessDiffuseVariable);
         importanceSamplingShaderDiffuse->getParameterByName("ConvolutionSamplesOffset", convolutionSamplesOffsetDiffuseVariable);
         importanceSamplingShaderDiffuse->getParameterByName("ConvolutionSampleCount", convolutionSampleCountDiffuseVariable);
         importanceSamplingShaderDiffuse->getParameterByName("ConvolutionMaxSamples", convolutionMaxSamplesDiffuseVariable);
@@ -237,26 +244,10 @@ IBLRenderPass::refineSpecular(Ctr::Scene* scene,
 {
 	Ctr::Camera* camera = scene->camera();
 
-    float projNear = camera->zNear();
-    float projFar = camera->zFar();
-    Ctr::Matrix44f proj;
-    Ctr::projectionPerspectiveMatrixLH (Ctr::BB_PI * 0.5f,
-                                                        1.0, 
-                                                        projNear, 
-                                                        projFar,
-                                                        &proj);
-
-	Ctr::Vector3f origin(0, 0, 0);
-    // Setup view matrix
-	_environmentTransformCache->set(probe->basis(), proj, probe->basis(), origin, projNear, projFar, -1);
-    camera->setCameraTransformCache(_environmentTransformCache);
-
     // Setup our source.
     size_t mipLevels = probe->specularCubeMap()->resource()->mipLevels() - probe->mipDrop();
     const Ctr::ITexture* sourceTexture = probe->environmentCubeMap();
 
-    float roughness = 0;
-    float roughnessDelta = 1.0f / (float)(mipLevels-1);
     float samplesOffset = (float)(probe->sampleOffset());
     float samplesPerFrame = (float)(probe->samplesPerFrame());
     float sampleCount = (float)(probe->sampleCount());
@@ -265,13 +256,34 @@ IBLRenderPass::refineSpecular(Ctr::Scene* scene,
     const Ctr::IShader* importanceSamplingShaderSpecular = brdf->specularImportanceSamplingShader();
 
     // Convolve specular.
-    uint32_t mipSize = probe->specularCubeMap()->resource()->width();
+	const uint32_t maxMipSize = probe->specularCubeMap()->resource()->width();
 
     for (uint32_t mipId = 0; mipId < mipLevels; mipId++)
     {
-        float currentMip = (float)(mipId);
+    	const float currentMip = static_cast<float>(mipId);
+		const float roughness = currentMip / (mipLevels - 1);
+		const int mipSize = maxMipSize >> mipId;
 
-        const Ctr::ISurface* targetSurface = probe->specularCubeMap()->surface(-1, mipId);
+		// Fix edges seams for older hardware
+		// https://www.gamedev.net/blogs/entry/2005516-seamless-filtering-across-faces-of-dynamic-cube-map/
+		const float fov = Ctr::BB_PI * 0.5f; // 2.0 * atan(mipSize / (mipSize - 0.5)); 
+
+		float projNear = camera->zNear();
+		float projFar = camera->zFar();
+		Ctr::Matrix44f proj;
+		Ctr::projectionPerspectiveMatrixLH(fov,
+			1.0,
+			projNear,
+			projFar,
+			&proj);
+
+		Ctr::Vector3f origin(0, 0, 0);
+		// Setup view matrix
+		_environmentTransformCache->set(probe->basis(), proj, probe->basis(), origin, projNear, projFar, -1);
+		camera->setCameraTransformCache(_environmentTransformCache);
+
+
+    	const Ctr::ISurface* targetSurface = probe->specularCubeMap()->surface(-1, mipId);
         Ctr::FrameBuffer framebuffer(targetSurface, nullptr);
 
         Ctr::Viewport mipViewport (0.0f,0.0f, (float)(mipSize), (float)(mipSize), 0.0f, 1.0f);
@@ -282,7 +294,7 @@ IBLRenderPass::refineSpecular(Ctr::Scene* scene,
         const Ctr::GpuTechnique*     importanceSamplingSpecularTechnique = nullptr;
         const Ctr::GpuVariable*      convolutionSrcSpecularVariable = nullptr;
         const Ctr::GpuVariable*      convolutionMipSpecularVariable = nullptr;
-        const Ctr::GpuVariable*      convolutionRoughnessSpecularVariable = nullptr;
+		const Ctr::GpuVariable*      convolutionRoughnessSpecularVariable = nullptr;
         const Ctr::GpuVariable*      convolutionSamplesOffsetSpecularVariable = nullptr;
         const Ctr::GpuVariable*      convolutionSampleCountSpecularVariable = nullptr;
         const Ctr::GpuVariable*      convolutionMaxSamplesSpecularVariable = nullptr;
@@ -292,7 +304,7 @@ IBLRenderPass::refineSpecular(Ctr::Scene* scene,
         importanceSamplingShaderSpecular->getParameterByName("ConvolutionSrc",     convolutionSrcSpecularVariable);
         importanceSamplingShaderSpecular->getParameterByName("LastResult",         convolutionSrcLastResultSpecularVariable);
         importanceSamplingShaderSpecular->getParameterByName("ConvolutionMip",     convolutionMipSpecularVariable);
-        importanceSamplingShaderSpecular->getParameterByName("ConvolutionRoughness", convolutionRoughnessSpecularVariable);
+		importanceSamplingShaderSpecular->getParameterByName("ConvolutionRoughness", convolutionRoughnessSpecularVariable);
         importanceSamplingShaderSpecular->getParameterByName("ConvolutionSamplesOffset", convolutionSamplesOffsetSpecularVariable);
         importanceSamplingShaderSpecular->getParameterByName("ConvolutionSampleCount", convolutionSampleCountSpecularVariable);
         importanceSamplingShaderSpecular->getParameterByName("ConvolutionMaxSamples", convolutionMaxSamplesSpecularVariable);
@@ -308,9 +320,6 @@ IBLRenderPass::refineSpecular(Ctr::Scene* scene,
 
         // Render the paraboloid out.
         importanceSamplingShaderSpecular->renderMesh (Ctr::RenderRequest(importanceSamplingSpecularTechnique, scene, camera, _sphereMesh));
-        roughness += roughnessDelta;
-
-        mipSize = mipSize >> 1;
     }
 }
 
