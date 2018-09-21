@@ -308,15 +308,14 @@ ShaderD3D11::createEffect ()
             { 
         
                 // LOG ("Failed to compile ... " << shaderStream() << "\n");
-                LOG ("Failed to compile " << IShader::filePathName());
+                LOG_CRITICAL("Failed to compile " << IShader::filePathName());
         
                 if(errors) 
                 { 
-        
                     char* buffer = new char[errors->GetBufferSize()+1];
                     memset(&buffer[0], 0, errors->GetBufferSize()+1);
                     memcpy(&buffer[0], errors->GetBufferPointer(), errors->GetBufferSize());
-                    // LOG ("Error Compiling ShaderD3D11" << buffer);
+                    LOG_CRITICAL("Error Compiling ShaderD3D11" << buffer);
         
                     generateDumpFile(IShader::filePathName(), buffer, shaderStream());
         
@@ -332,7 +331,7 @@ ShaderD3D11::createEffect ()
             if(FAILED(D3DCompile(shaderStream().c_str(), shaderStream().size(), 0, 0, nullptr, "", "fx_5_0", 
                 hlslFlags, 0,  &shaderCode, &errors)))
             { 
-                LOG ("Failed to compile " << IShader::filePathName());
+                LOG_CRITICAL("Failed to compile " << IShader::filePathName());
         
                 // Open file and dump error information.
         
@@ -342,7 +341,7 @@ ShaderD3D11::createEffect ()
                     memset(&buffer[0], 0, errors->GetBufferSize()+1);
                     memcpy(&buffer[0], errors->GetBufferPointer(), errors->GetBufferSize());
                     generateDumpFile(IShader::filePathName(), buffer, shaderStream());
-                    LOG ("Error Compiling ShaderD3D11" << buffer);
+                    LOG_CRITICAL("Error Compiling ShaderD3D11" << buffer);
                     delete[] (buffer);
                 } 
                 return false;

@@ -104,6 +104,9 @@ class IBLProbe : public Ctr::TransformNode
     int32_t                    samplesPerFrame() const;
     IntProperty*               samplesPerFrameProperty();
 
+    // If non-null, use a fixed sample offset, to see how the filter behaves at the offset
+    IntProperty *              sampleOffsetProperty();
+
     int32_t                    mipDrop() const;
     IntProperty*               mipDropProperty();
 
@@ -155,6 +158,7 @@ class IBLProbe : public Ctr::TransformNode
     IntProperty*               _mipDropProperty;
     IntProperty*               _samplesPerFrameProperty;
     IntProperty*               _sampleCountProperty;
+    IntProperty*               _sampleOffsetProperty;
     BoolProperty*              _markedComputedProperty;
     IntProperty*               _diffuseResolutionProperty;
     IntProperty*               _specularResolutionProperty;

@@ -152,7 +152,8 @@ RenderWindow::create(const Application* application,
                 updateBounds();
 
                 clientResize(handle, width, height);
-                UpdateWindow (windowHandle());
+                ShowWindow(handle, SW_MAXIMIZE);
+                UpdateWindow(handle);
                 return true;
             }
             else

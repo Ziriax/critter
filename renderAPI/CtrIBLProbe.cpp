@@ -84,6 +84,7 @@ IBLProbe::IBLProbe(Ctr::IDevice * device) :
     _renderId(0),
     _samplesRemaining(1024),
     _sampleCountProperty(new Ctr::IntProperty(this, "Total Samples", new Ctr::TweakFlags(0, 16384, 1, "IBL"))),
+    _sampleOffsetProperty(new Ctr::IntProperty(this, "Sample offset", new Ctr::TweakFlags(0, 16384, 1, "IBL"))),
     _samplesPerFrameProperty(new Ctr::IntProperty(this, "Samples Per Frame", new Ctr::TweakFlags(0, 16384, 1, "IBL"))),
     _markedComputedProperty(new Ctr::BoolProperty(this, "Computed")),
     _diffuseResolutionProperty(new Ctr::IntProperty(this, "Diffuse Resolution", new TweakFlags(&IblSourceResolutionType, "IBL"))),
@@ -113,6 +114,7 @@ IBLProbe::IBLProbe(Ctr::IDevice * device) :
     _iblHueProperty->set(0.0f);
     _iblContrastProperty->set(0.0f);
     _iblSaturationProperty->set(1.0f);
+    _sampleOffsetProperty->set(0);
 
     _maxPixelRProperty->set(0);
     _maxPixelGProperty->set(0);
@@ -382,10 +384,18 @@ IBLProbe::sampleCountProperty()
     return _sampleCountProperty;
 }
 
+IntProperty*
+IBLProbe::sampleOffsetProperty()
+{
+    return nullptr;
+    // [PV] Change to fix the sample offset
+    //return _sampleOffsetProperty;
+}
+
 int32_t
 IBLProbe::sampleOffset() const
 {
-    return _sampleOffset;
+    return sampleOffsetProperty() ? sampleOffsetProperty()->get() : _sampleOffset;
 }
 
 void
@@ -435,6 +445,7 @@ IBLProbe::update()
               _diffuseResolutionProperty->get() << 
               _mipDropProperty->get() << 
               _sampleCountProperty->get() << 
+              _sampleOffsetProperty->get() <<
               _samplesPerFrameProperty->get() <<
               _iblHueProperty->get() <<
               _iblContrastProperty->get() <<

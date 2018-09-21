@@ -151,6 +151,8 @@ IBLRenderPass::loadMesh()
     return true;
 }
 
+#define BREAK_OR_PASS(p) if (!(p)) break; (p)
+
 void
 IBLRenderPass::refineDiffuse(Ctr::Scene* scene,
                              const Ctr::IBLProbe* probe)
@@ -225,14 +227,13 @@ IBLRenderPass::refineDiffuse(Ctr::Scene* scene,
         importanceSamplingShaderDiffuse->getParameterByName("ConvolutionMaxSamples", convolutionMaxSamplesDiffuseVariable);
 
         // Set parameters
-        convolutionSrcDiffuseVariable->setTexture(sourceTexture);
-        convolutionSrcLastResultDiffuseVariable->setTexture(probe->lastDiffuseCubeMap());
-        
-        convolutionMipDiffuseVariable->set ((const float*)&currentMip, sizeof (float));
-        convolutionRoughnessDiffuseVariable->set((const float*)&roughness, sizeof (float));
-        convolutionSamplesOffsetDiffuseVariable->set((const float*)&samplesOffset, sizeof (float));        
-        convolutionSampleCountDiffuseVariable->set(&samplesPerFrame , sizeof(float));
-        convolutionMaxSamplesDiffuseVariable->set(&sampleCount, sizeof(float));
+        BREAK_OR_PASS(convolutionSrcDiffuseVariable)->setTexture(sourceTexture);
+        BREAK_OR_PASS(convolutionSrcLastResultDiffuseVariable)->setTexture(probe->lastDiffuseCubeMap());
+        BREAK_OR_PASS(convolutionMipDiffuseVariable)->set ((const float*)&currentMip, sizeof (float));
+        BREAK_OR_PASS(convolutionRoughnessDiffuseVariable)->set((const float*)&roughness, sizeof (float));
+        BREAK_OR_PASS(convolutionSamplesOffsetDiffuseVariable)->set((const float*)&samplesOffset, sizeof (float));
+        BREAK_OR_PASS(convolutionSampleCountDiffuseVariable)->set(&samplesPerFrame , sizeof(float));
+        BREAK_OR_PASS(convolutionMaxSamplesDiffuseVariable)->set(&sampleCount, sizeof(float));
 
         importanceSamplingShaderDiffuse->renderMesh (Ctr::RenderRequest(importanceSamplingDiffuseTechnique, scene, camera, _sphereMesh));
     }
@@ -310,13 +311,13 @@ IBLRenderPass::refineSpecular(Ctr::Scene* scene,
         importanceSamplingShaderSpecular->getParameterByName("ConvolutionMaxSamples", convolutionMaxSamplesSpecularVariable);
 
         // Set parameters
-        convolutionSrcSpecularVariable->setTexture(sourceTexture);
-        convolutionSrcLastResultSpecularVariable->setTexture(probe->lastSpecularCubeMap());
-        convolutionMipSpecularVariable->set ((const float*)&currentMip, sizeof (float));
-		convolutionRoughnessSpecularVariable->set((const float*)&roughness, sizeof (float));
-        convolutionSamplesOffsetSpecularVariable->set((const float*)&samplesOffset, sizeof (float));
-        convolutionSampleCountSpecularVariable->set(&samplesPerFrame , sizeof(float));
-        convolutionMaxSamplesSpecularVariable->set(&sampleCount, sizeof(float));
+        BREAK_OR_PASS(convolutionSrcSpecularVariable)->setTexture(sourceTexture);
+        BREAK_OR_PASS(convolutionSrcLastResultSpecularVariable)->setTexture(probe->lastSpecularCubeMap());
+        BREAK_OR_PASS(convolutionMipSpecularVariable)->set ((const float*)&currentMip, sizeof (float));
+		BREAK_OR_PASS(convolutionRoughnessSpecularVariable)->set((const float*)&roughness, sizeof (float));
+        BREAK_OR_PASS(convolutionSamplesOffsetSpecularVariable)->set((const float*)&samplesOffset, sizeof (float));
+        BREAK_OR_PASS(convolutionSampleCountSpecularVariable)->set(&samplesPerFrame , sizeof(float));
+        BREAK_OR_PASS(convolutionMaxSamplesSpecularVariable)->set(&sampleCount, sizeof(float));
 
         // Render the paraboloid out.
         importanceSamplingShaderSpecular->renderMesh (Ctr::RenderRequest(importanceSamplingSpecularTechnique, scene, camera, _sphereMesh));
@@ -360,7 +361,7 @@ IBLRenderPass::render (Ctr::Scene* scene)
 
     #ifdef _DEBUG 
     // To enable shader debugging
-    forceUncache = true;
+    //forceUncache = true;
     #endif
 
     Ctr::CameraTransformCachePtr cachedTransforms = scene->camera()->cameraTransformCache();
@@ -374,10 +375,11 @@ IBLRenderPass::render (Ctr::Scene* scene)
 
         bool cached = probe->isCached();
         if (cached)
-        {
             continue;
-        }
-        else if (probe->sampleOffset() == 0)
+
+        const bool firstOutput = probe->sampleOffset() == 0 || probe->sampleOffsetProperty() != nullptr;
+
+        if (firstOutput)
         {
             // If sample offset is 0, we need to create the environment
             // map and perform a first set of samples.
@@ -411,7 +413,7 @@ IBLRenderPass::render (Ctr::Scene* scene)
                 Ctr::Vector2f mipSize = Ctr::Vector2f(float(probe->environmentCubeMap()->resource()->width()), 
                                                     float(probe->environmentCubeMap()->resource()->height()));
 
-                for (size_t mipId = 0; mipId < mipLevels; mipId++)
+                for (size_t mipId = 0; mipId < 1; mipId++)
                 {
                     Ctr::Viewport mipViewport (0.0f, 0.0f, (float)(mipSize.x), (float)(mipSize.y), 0.0f, 1.0f);
 
@@ -440,6 +442,7 @@ IBLRenderPass::render (Ctr::Scene* scene)
                 }
 
                 // Generate mip maps post rendering.
+                // TODO: Use a better downsampler than mip-map creation?
                 probe->environmentCubeMap()->generateMipMaps();    
                 refineSpecular(scene, probe);
                 refineDiffuse(scene, probe);
@@ -547,15 +550,15 @@ IBLRenderPass::colorConvert(bool applyMDR,
         _deviceInterface->bindFrameBuffer(framebuffer);
         _deviceInterface->setViewport(&mipViewport);
 
-        _colorConversionMipLevelVariable->set((const float*)&currentMip, sizeof(float));
-        _colorConversionIsMDRVariable->set((const float*)&isMDR, sizeof(float));
-        _colorConversionMDRScaleVariable->set((const float*)&_colorConversionMDRScale, sizeof(float));
-        _colorConversionGammaVariable->set((const float*)&_colorConversionGamma, sizeof(float));
-        _colorConversionLDRExposureVariable->set((const float*)&_colorConversionLDRExposure, sizeof(float));
-        _colorConversionMDRScaleVariable->set((const float*)&_colorConversionMDRScale, sizeof(float));
+        BREAK_OR_PASS(_colorConversionMipLevelVariable)->set((const float*)&currentMip, sizeof(float));
+        BREAK_OR_PASS(_colorConversionIsMDRVariable)->set((const float*)&isMDR, sizeof(float));
+        BREAK_OR_PASS(_colorConversionMDRScaleVariable)->set((const float*)&_colorConversionMDRScale, sizeof(float));
+        BREAK_OR_PASS(_colorConversionGammaVariable)->set((const float*)&_colorConversionGamma, sizeof(float));
+        BREAK_OR_PASS(_colorConversionLDRExposureVariable)->set((const float*)&_colorConversionLDRExposure, sizeof(float));
+        BREAK_OR_PASS(_colorConversionMDRScaleVariable)->set((const float*)&_colorConversionMDRScale, sizeof(float));
 
         // Render the paraboloid out.
-        _colorConversionShader->renderMesh(Ctr::RenderRequest(_colorConversionTechnique, scene, scene->camera(), _sphereMesh));
+        BREAK_OR_PASS(_colorConversionShader)->renderMesh(Ctr::RenderRequest(_colorConversionTechnique, scene, scene->camera(), _sphereMesh));
         mipSize.x /= 2;
         mipSize.y /= 2;
     }
