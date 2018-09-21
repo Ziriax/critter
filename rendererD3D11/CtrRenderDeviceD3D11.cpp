@@ -59,6 +59,7 @@
 #include <CtrTexture2DD3D11.h>
 #include <CtrColorResolve.h>
 #include <CtrDepthResolve.h>
+#include "d3dxGlobal.h"
 
 namespace Ctr
 {
@@ -279,66 +280,97 @@ DeviceD3D11::initialize (const Ctr::ApplicationRenderParameters& deviceParameter
 
     // Try to create the device with the chosen settings
     hr = S_OK;
-    if((pDXGIFactory->EnumAdapters1 (_creationParameters._adapterOrdinal, &_adapter )) != S_OK)
+
+    // Find adapter that supports feature level 11_1
+    UINT i = 0;
+    D3D_FEATURE_LEVEL targetFeatureLevels = D3D_FEATURE_LEVEL_11_0;
+
+    UINT createFlags = D3D11_CREATE_DEVICE_DISABLE_GPU_TIMEOUT;
+
+#ifdef _DEBUG
+    createFlags |= 0; //  D3D11_CREATE_DEVICE_DEBUG;
+    // NOTE: It seems only the Microsoft Basic Render Driver supports D3D11_CREATE_DEVICE_DEBUGGABLE
+    // NOTE: The Microsoft Visual Studio Graphics debugger hangs when creating the device with D3D11_CREATE_DEVICE_DEBUG
+#endif
+
+    while (pDXGIFactory->EnumAdapters1(i, &_adapter) != DXGI_ERROR_NOT_FOUND)
     {
-        THROW ("Failed to enum D3D11 device...\n");
+        DXGI_ADAPTER_DESC desc;
+        hr = _adapter->GetDesc(&desc);
+
+        _wprintf_p(L"Trying DXGI adapter %s...\n", &desc.Description);
+
+        hr = D3D11CreateDevice(
+            _adapter,
+            D3D_DRIVER_TYPE_UNKNOWN,
+            nullptr,
+            createFlags,
+            &targetFeatureLevels,
+            1,
+            D3D11_SDK_VERSION,
+            &_direct3d,
+            &_level,
+            &_immediateCtx);
+
+        if (SUCCEEDED(hr) && _level >= targetFeatureLevels)
+            break;
+
+        SAFE_RELEASE(_adapter);
+        SAFE_RELEASE(_direct3d);
+        SAFE_RELEASE(_immediateCtx);
+         ++i;
     }
+
+    if (_direct3d == nullptr || _immediateCtx == nullptr)
+        THROW("No suitable D3D11 device found...\n");
     
-    _level = D3D_FEATURE_LEVEL_10_0;
     //_multiSampleCount = _creationParameters->SampleDesc.Count;
     //_multiSampleQuality = _creationParameters->SampleDesc.Quality;
 
     //LOG ("multisampleCount = " << multiSampleCount() << " " <<
     //    "multiSampleQuality = " << multiSampleQuality() << "\n");
-
+    
     _creationParameters._sd.SampleDesc.Count = 1;
     _creationParameters._sd.SampleDesc.Quality = 0;
-    if (D3D11CreateDeviceAndSwapChain (_adapter, /*pAdapter nullptr*/ 
-                                       D3D_DRIVER_TYPE_UNKNOWN, 
-                                       0,
-                                       0,//_creationParameters->CreateFlags,
-                                       0, 0, D3D11_SDK_VERSION, 
-                                       &_creationParameters._sd, &_swapChain, &_direct3d, &_level, &_immediateCtx) != S_OK)
+    hr = pDXGIFactory->CreateSwapChain(_direct3d, &_creationParameters._sd, &_swapChain);
+
+    if (hr != S_OK)
+        THROW ("Failed to create D3D11 swap chain...\n");
+
+    std::string d3dFeatureLevel = "UNKNOWN";
+    switch (_level)
     {
-        THROW ("Failed to create D3D11 device...\n");
-    }
-    else
+    case D3D_FEATURE_LEVEL_9_1:
+        d3dFeatureLevel = "Direct3d 9.1";
+        break;
+    case D3D_FEATURE_LEVEL_9_2:
+        d3dFeatureLevel = "Direct3d 9.2";
+        break;
+    case D3D_FEATURE_LEVEL_9_3:
+        d3dFeatureLevel = "Direct3d 9.3";
+        break;
+    case D3D_FEATURE_LEVEL_10_0:
+        d3dFeatureLevel = "Direct3d 10";
+        break;
+        break;
+    case D3D_FEATURE_LEVEL_10_1:
+        d3dFeatureLevel = "Direct3d 10.1";
+        break;
+    case D3D_FEATURE_LEVEL_11_0:
+        d3dFeatureLevel = "Direct3d 11";
+        break;
+        break;
+    };
+
+
+    LOG ("Created D3D11 device with feature level " << d3dFeatureLevel);
+
+    _level = _direct3d->GetFeatureLevel();
+    if (!_creationParameters._sd.Windowed)
     {
-        std::string d3dFeatureLevel = "UKNOWN";
-        switch (_level)
-        {
-            case D3D_FEATURE_LEVEL_9_1:
-                d3dFeatureLevel = "Direct3d 9.1";
-                break;
-	        case D3D_FEATURE_LEVEL_9_2:
-                d3dFeatureLevel = "Direct3d 9.2";
-                break;
-	        case D3D_FEATURE_LEVEL_9_3:
-                d3dFeatureLevel = "Direct3d 9.3";
-                break;
-            case D3D_FEATURE_LEVEL_10_0:
-                d3dFeatureLevel = "Direct3d 10";
-                break;
-                break;
-            case D3D_FEATURE_LEVEL_10_1:
-                d3dFeatureLevel = "Direct3d 10.1";
-                break;
-            case D3D_FEATURE_LEVEL_11_0:
-                d3dFeatureLevel = "Direct3d 11";
-                break;
-                break;
-        };
-
-
-        LOG ("Created D3D11 device with feature level " << d3dFeatureLevel);
-
-        _level = _direct3d->GetFeatureLevel();
-        if (!_creationParameters._sd.Windowed)
-        {
-            hr = _swapChain->SetFullscreenState( TRUE, nullptr );
-        }
+        hr = _swapChain->SetFullscreenState(TRUE, nullptr);
     }
-    
+
     if (SUCCEEDED(hr))
     {
         _backbuffer = new BackbufferSurfaceD3D11 (this, _swapChain);
@@ -992,7 +1024,7 @@ DeviceD3D11::bindSurfaceAndTargets()
     _immediateCtx->OMSetRenderTargetsAndUnorderedAccessViews(MAX_RENDER_TARGETS,
                                                              &views[0], 
                                                              nullptr, 
-                                                             MAX_RENDER_TARGETS,/* start uav slot*/ 
+                                                             0,/* start uav slot*/ 
                                                              MAX_RENDER_TARGETS, 
                                                              &unorderedViews[0], 
                                                              initialCounts);
@@ -1075,7 +1107,7 @@ DeviceD3D11::bindSurfaceAndTargets()
                                                                  &views[0], 
                                                                  depthSurfaceView, 
                                                                  _currentSurfaceCount,/* start uav slot*/ 
-                                                                 MAX_RENDER_TARGETS, 
+                                                                 _currentUAVCount,
                                                                  &unorderedViews[0], 
                                                                  initialCounts);
     }

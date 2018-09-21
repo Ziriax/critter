@@ -358,6 +358,11 @@ IBLRenderPass::render (Ctr::Scene* scene)
         forceUncache = true;
     }
 
+    #ifdef _DEBUG 
+    // To enable shader debugging
+    forceUncache = true;
+    #endif
+
     Ctr::CameraTransformCachePtr cachedTransforms = scene->camera()->cameraTransformCache();
     for (auto it = probes.begin(); it != probes.end(); it++)
     {
