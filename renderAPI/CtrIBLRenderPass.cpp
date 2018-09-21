@@ -153,6 +153,12 @@ IBLRenderPass::loadMesh()
 
 #define BREAK_OR_PASS(p) if (!(p)) break; (p)
 
+uint32_t urand32()
+{
+    uint64_t r = rand();
+    return r * 0xFFFFFFFF / RAND_MAX;
+}
+
 void
 IBLRenderPass::refineDiffuse(Ctr::Scene* scene,
                              const Ctr::IBLProbe* probe)
@@ -164,7 +170,7 @@ IBLRenderPass::refineDiffuse(Ctr::Scene* scene,
 
 	// Render just one level, create mip-maps for the others
 	// [PV] For some reason, generateMipMaps doesn't work on the diffuse map?
-	for (uint32_t mipId = 0; mipId < mipLevels; mipId++)
+	for (uint32_t mipId = 0; mipId < 1; mipId++)
 	{
 		const int mipSize = maxMipSize >> mipId;
 
@@ -193,8 +199,6 @@ IBLRenderPass::refineDiffuse(Ctr::Scene* scene,
 		const float samplesPerFrame = static_cast<float>(probe->samplesPerFrame());
 		const float sampleCount = static_cast<float>(probe->sampleCount());
 
-	    const float roughness = 1.0;
-
 	    const Ctr::Brdf* brdf = scene->activeBrdf();
 	    const Ctr::IShader* importanceSamplingShaderDiffuse = brdf->diffuseImportanceSamplingShader();
 
@@ -210,30 +214,31 @@ IBLRenderPass::refineDiffuse(Ctr::Scene* scene,
         const Ctr::GpuTechnique* importanceSamplingDiffuseTechnique = nullptr;
         const Ctr::GpuVariable*  convolutionSrcDiffuseVariable = nullptr;
         const Ctr::GpuVariable*  convolutionMipDiffuseVariable = nullptr;
-        const Ctr::GpuVariable*  convolutionRoughnessDiffuseVariable = nullptr;
         const Ctr::GpuVariable*  convolutionSamplesOffsetDiffuseVariable = nullptr;
-        const Ctr::GpuVariable*  convolutionViewsDiffuseVariable = nullptr;
         const Ctr::GpuVariable*  convolutionSampleCountDiffuseVariable = nullptr;
         const Ctr::GpuVariable*  convolutionMaxSamplesDiffuseVariable = nullptr;
         const Ctr::GpuVariable*  convolutionSrcLastResultDiffuseVariable = nullptr;
+        const Ctr::GpuVariable*  convolutionRandomVariable = nullptr;
 
         importanceSamplingShaderDiffuse->getTechniqueByName(std::string("basic"), importanceSamplingDiffuseTechnique);
         importanceSamplingShaderDiffuse->getParameterByName("ConvolutionSrc", convolutionSrcDiffuseVariable);
         importanceSamplingShaderDiffuse->getParameterByName("LastResult", convolutionSrcLastResultDiffuseVariable);
         importanceSamplingShaderDiffuse->getParameterByName("ConvolutionMip", convolutionMipDiffuseVariable);
-		importanceSamplingShaderDiffuse->getParameterByName("ConvolutionRoughness", convolutionRoughnessDiffuseVariable);
         importanceSamplingShaderDiffuse->getParameterByName("ConvolutionSamplesOffset", convolutionSamplesOffsetDiffuseVariable);
         importanceSamplingShaderDiffuse->getParameterByName("ConvolutionSampleCount", convolutionSampleCountDiffuseVariable);
         importanceSamplingShaderDiffuse->getParameterByName("ConvolutionMaxSamples", convolutionMaxSamplesDiffuseVariable);
+        importanceSamplingShaderDiffuse->getParameterByName("ConvolutionRandom", convolutionRandomVariable);
+
+        uint32_t random[] = { urand32(), urand32() };
 
         // Set parameters
         BREAK_OR_PASS(convolutionSrcDiffuseVariable)->setTexture(sourceTexture);
         BREAK_OR_PASS(convolutionSrcLastResultDiffuseVariable)->setTexture(probe->lastDiffuseCubeMap());
         BREAK_OR_PASS(convolutionMipDiffuseVariable)->set ((const float*)&currentMip, sizeof (float));
-        BREAK_OR_PASS(convolutionRoughnessDiffuseVariable)->set((const float*)&roughness, sizeof (float));
         BREAK_OR_PASS(convolutionSamplesOffsetDiffuseVariable)->set((const float*)&samplesOffset, sizeof (float));
         BREAK_OR_PASS(convolutionSampleCountDiffuseVariable)->set(&samplesPerFrame , sizeof(float));
         BREAK_OR_PASS(convolutionMaxSamplesDiffuseVariable)->set(&sampleCount, sizeof(float));
+        BREAK_OR_PASS(convolutionRandomVariable)->set(&random, _ARRAYSIZE(random));
 
         importanceSamplingShaderDiffuse->renderMesh (Ctr::RenderRequest(importanceSamplingDiffuseTechnique, scene, camera, _sphereMesh));
     }

@@ -385,7 +385,7 @@ IBLProbe::sampleCountProperty()
 }
 
 IntProperty*
-IBLProbe::sampleOffsetProperty()
+IBLProbe::sampleOffsetProperty() const
 {
     return nullptr;
     // [PV] Change to fix the sample offset
