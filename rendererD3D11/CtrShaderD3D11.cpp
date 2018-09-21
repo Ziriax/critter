@@ -281,10 +281,12 @@ ShaderD3D11::createEffect ()
     {        
         uint32_t hlslFlags = 0;
 
-        {
-            hlslFlags = D3D10_SHADER_ENABLE_BACKWARDS_COMPATIBILITY;
-        }
-    
+        hlslFlags = D3DCOMPILE_ENABLE_BACKWARDS_COMPATIBILITY;
+
+#ifdef _DEBUG
+        hlslFlags |= D3DCOMPILE_SKIP_OPTIMIZATION | D3DCOMPILE_DEBUG;
+#endif
+        
         ID3D10Blob * shaderCode = 0;
         ID3D10Blob * errors = 0;
 
@@ -328,8 +330,7 @@ ShaderD3D11::createEffect ()
         {
             _hash.build(shaderStream());
             if(FAILED(D3DCompile(shaderStream().c_str(), shaderStream().size(), 0, 0, nullptr, "", "fx_5_0", 
-                                 D3DCOMPILE_ENABLE_BACKWARDS_COMPATIBILITY | D3DCOMPILE_SKIP_OPTIMIZATION
-                                 , 0,  &shaderCode, &errors)))
+                hlslFlags, 0,  &shaderCode, &errors)))
             { 
                 LOG ("Failed to compile " << IShader::filePathName());
         
